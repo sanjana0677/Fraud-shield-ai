@@ -1,4 +1,3 @@
-
 import json
 import warnings
 from pathlib import Path
@@ -13,25 +12,33 @@ from xgboost import XGBClassifier
 
 warnings.filterwarnings("ignore")
 
-# ---------------------------------------------------------
-# PATHS AND PAGE CONFIGURATION
-# ---------------------------------------------------------
 
-# Supports files uploaded directly to GitHub root
-# and the original models/, data/, results/ folders.
+# =========================================================
+# PATHS AND CONFIGURATION
+# =========================================================
 
 BASE_DIR = Path(__file__).resolve().parent
 
-MODEL_DIR = BASE_DIR / "models" if (BASE_DIR / "models").is_dir() else BASE_DIR
-DATA_DIR = BASE_DIR / "data" if (BASE_DIR / "data").is_dir() else BASE_DIR
-RESULTS_DIR = BASE_DIR / "results" if (BASE_DIR / "results").is_dir() else BASE_DIR
+def find_file(filename, folder=None):
+    """Find a file in the root folder or its original subfolder."""
 
-PREPROCESSOR_PATH = MODEL_DIR / "preprocessor.pkl"
-MODEL_PATH = MODEL_DIR / "final_xgboost_model.json"
-FEATURES_PATH = MODEL_DIR / "selected_features.json"
-THRESHOLD_PATH = MODEL_DIR / "decision_threshold.json"
+    if folder:
+        nested = BASE_DIR / folder / filename
+        if nested.exists():
+            return nested
 
-SAMPLE_PATH = DATA_DIR / "sample_transaction.csv"
+    root_file = BASE_DIR / filename
+    if root_file.exists():
+        return root_file
+
+    return BASE_DIR / folder / filename if folder else root_file
+
+
+PREPROCESSOR_PATH = find_file("preprocessor.pkl", "models")
+MODEL_PATH = find_file("final_xgboost_model.json", "models")
+FEATURES_PATH = find_file("selected_features.json", "models")
+THRESHOLD_PATH = find_file("decision_threshold.json", "models")
+SAMPLE_PATH = find_file("sample_transaction.csv", "data")
 
 st.set_page_config(
     page_title="FraudShield AI",
@@ -40,32 +47,27 @@ st.set_page_config(
 )
 
 
-
-# ---------------------------------------------------------
-# CUSTOM CSS - SOFT BLUE & LAVENDER THEME
-# ---------------------------------------------------------
+# =========================================================
+# CUSTOM CSS - SOFT BLUE AND LAVENDER THEME
+# =========================================================
 
 st.markdown("""
 <style>
 
-    /* Main application background */
     .stApp {
         background-color: #F5F7FC;
     }
 
-    /* Main content spacing */
     .block-container {
         padding-top: 3rem !important;
         padding-bottom: 2rem !important;
     }
 
-    /* Sidebar */
     [data-testid="stSidebar"] {
         background-color: #EDF2FF;
         border-right: 1px solid #DCE5F5;
     }
 
-    /* Main headings */
     .main-title {
         font-size: 32px;
         font-weight: 800;
@@ -73,6 +75,7 @@ st.markdown("""
         line-height: 1.5 !important;
         padding-top: 10px;
         padding-bottom: 8px;
+        overflow: visible;
     }
 
     .sub-title {
@@ -87,7 +90,6 @@ st.markdown("""
         color: #344B73;
     }
 
-    /* Metric cards */
     div[data-testid="stMetric"] {
         background-color: #FFFFFF;
         border: 1px solid #DCE5F5;
@@ -96,7 +98,6 @@ st.markdown("""
         box-shadow: 0 3px 12px rgba(36, 59, 100, 0.05);
     }
 
-    /* Buttons */
     div.stButton > button,
     div.stFormSubmitButton > button {
         background-color: #647FC4;
@@ -115,7 +116,6 @@ st.markdown("""
         border: none;
     }
 
-    /* Input fields */
     div[data-baseweb="input"] input,
     div[data-baseweb="select"] > div,
     div[data-baseweb="textarea"] textarea {
@@ -123,21 +123,18 @@ st.markdown("""
         border-radius: 8px;
     }
 
-    /* Dataframes */
     div[data-testid="stDataFrame"] {
         border: 1px solid #DCE5F5;
         border-radius: 10px;
         overflow: hidden;
     }
 
-    /* Expanders */
     div[data-testid="stExpander"] {
         background-color: #FFFFFF;
         border: 1px solid #DCE5F5;
         border-radius: 10px;
     }
 
-    /* Horizontal divider */
     hr {
         border-color: #DCE5F5;
     }
@@ -146,12 +143,27 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# ---------------------------------------------------------
+# =========================================================
 # LOAD MODEL AND PREPROCESSOR
-# ---------------------------------------------------------
+# =========================================================
 
 @st.cache_resource
 def load_model_files():
+
+    if not PREPROCESSOR_PATH.exists():
+        raise FileNotFoundError(
+            f"Preprocessor not found: {PREPROCESSOR_PATH}"
+        )
+
+    if not MODEL_PATH.exists():
+        raise FileNotFoundError(
+            f"XGBoost model not found: {MODEL_PATH}"
+        )
+
+    if not FEATURES_PATH.exists():
+        raise FileNotFoundError(
+            f"Selected features file not found: {FEATURES_PATH}"
+        )
 
     preprocessor = joblib.load(PREPROCESSOR_PATH)
 
@@ -166,7 +178,6 @@ def load_model_files():
     else:
         features = feature_data
 
-    # Load saved threshold or use 0.85 if missing.
     if THRESHOLD_PATH.exists():
 
         with open(THRESHOLD_PATH, "r") as file:
@@ -197,7 +208,6 @@ def load_sample_transaction():
 
 @st.cache_resource
 def load_shap_explainer(_model):
-
     return shap.TreeExplainer(_model)
 
 
@@ -215,10 +225,9 @@ except Exception as error:
     st.stop()
 
 
-# ---------------------------------------------------------
+# =========================================================
 # GENERAL HELPER FUNCTIONS
-# ---------------------------------------------------------
-
+# =========================================================
 
 def page_header(title, subtitle):
 
@@ -237,24 +246,19 @@ def page_header(title, subtitle):
 
 def result_file(relative_path):
 
-    # First check the original results folder structure.
-    nested_path = RESULTS_DIR / relative_path
+    parts = Path(relative_path).parts
 
-    if nested_path.exists():
-        return nested_path
+    if len(parts) > 1:
+        nested_path = BASE_DIR.joinpath(*parts)
+        if nested_path.exists():
+            return nested_path
 
-    # Then check the file directly in the GitHub root.
     root_path = BASE_DIR / Path(relative_path).name
 
     return root_path
 
 
 def prepare_input(data):
-
-    """
-    Ensures that the input contains exactly the selected
-    61 features in the correct order.
-    """
 
     data = data.copy()
 
@@ -268,17 +272,10 @@ def prepare_input(data):
             "Missing required columns: " + ", ".join(missing)
         )
 
-    data = data[FEATURES]
-
-    return data
+    return data[FEATURES]
 
 
 def get_prediction(input_data):
-
-    """
-    Uses the saved preprocessing pipeline and trained model.
-    No retraining takes place.
-    """
 
     input_data = prepare_input(input_data)
 
@@ -300,8 +297,6 @@ def prediction_label(probability):
 
 
 def display_prediction(probability):
-
-    prediction = prediction_label(probability)
 
     col1, col2 = st.columns(2)
 
@@ -334,11 +329,6 @@ def display_prediction(probability):
 
 def save_current_transaction(data, source):
 
-    """
-    Stores the latest transaction in session state.
-    The Explainable AI page reads this same transaction.
-    """
-
     data = prepare_input(data)
 
     st.session_state["current_transaction"] = data.copy()
@@ -355,20 +345,12 @@ def get_current_transaction():
     sample = load_sample_transaction()
 
     if sample is not None:
-
-        sample = prepare_input(sample.head(1))
-
-        return sample
+        return prepare_input(sample.head(1))
 
     return None
 
 
 def get_preprocessor_categorical_features():
-
-    """
-    Attempts to identify categorical input features from
-    the fitted ColumnTransformer.
-    """
 
     categorical = set()
 
@@ -387,9 +369,9 @@ def get_preprocessor_categorical_features():
     return categorical
 
 
-# ---------------------------------------------------------
+# =========================================================
 # MANUAL TRANSACTION INPUT
-# ---------------------------------------------------------
+# =========================================================
 
 def manual_transaction_input():
 
@@ -435,10 +417,10 @@ def manual_transaction_input():
 
                 if feature in categorical_features:
 
-                    if pd.isna(default_value):
-                        default_text = ""
-                    else:
-                        default_text = str(default_value)
+                    default_text = (
+                        "" if pd.isna(default_value)
+                        else str(default_value)
+                    )
 
                     entered_values[feature] = st.text_input(
                         feature,
@@ -450,10 +432,10 @@ def manual_transaction_input():
                     pd.Series([default_value])
                 ):
 
-                    if pd.isna(default_value):
-                        default_number = 0.0
-                    else:
-                        default_number = float(default_value)
+                    default_number = (
+                        0.0 if pd.isna(default_value)
+                        else float(default_value)
+                    )
 
                     entered_values[feature] = st.number_input(
                         feature,
@@ -530,9 +512,9 @@ def manual_transaction_input():
             st.error(f"Prediction failed: {error}")
 
 
-# ---------------------------------------------------------
+# =========================================================
 # CSV TRANSACTION UPLOAD
-# ---------------------------------------------------------
+# =========================================================
 
 def csv_transaction_upload():
 
@@ -664,9 +646,9 @@ def csv_transaction_upload():
         )
 
 
-# ---------------------------------------------------------
-# SHAP INDIVIDUAL EXPLANATION
-# ---------------------------------------------------------
+# =========================================================
+# INDIVIDUAL SHAP EXPLANATION FUNCTION
+# =========================================================
 
 def calculate_individual_shap(transaction):
 
@@ -711,9 +693,9 @@ def calculate_individual_shap(transaction):
     return explanation
 
 
-# ---------------------------------------------------------
+# =========================================================
 # SIDEBAR NAVIGATION
-# ---------------------------------------------------------
+# =========================================================
 
 st.sidebar.markdown("## 🛡️ FraudShield AI")
 
@@ -751,9 +733,7 @@ if page == "🏠 Dashboard":
         "Intelligent E-Commerce Fraud Detection System"
     )
 
-    st.markdown(
-        "### Welcome to FraudShield AI"
-    )
+    st.markdown("### Welcome to FraudShield AI")
 
     st.write(
         "FraudShield AI is an explainable machine learning system "
@@ -763,20 +743,14 @@ if page == "🏠 Dashboard":
 
     col1, col2, col3 = st.columns(3)
 
-    col1.metric(
-        "Selected Input Features",
-        len(FEATURES)
-    )
+    col1.metric("Selected Input Features", len(FEATURES))
 
     col2.metric(
         "Decision Threshold",
         f"{THRESHOLD * 100:.0f}%"
     )
 
-    col3.metric(
-        "Machine Learning Model",
-        "XGBoost"
-    )
+    col3.metric("Machine Learning Model", "XGBoost")
 
     st.divider()
 
@@ -875,3 +849,679 @@ elif page == "🔍 Fraud Prediction":
             "Open the Explainable AI page to view the SHAP explanation "
             "for this exact transaction."
         )
+
+
+# =========================================================
+# PAGE 3: EXPLAINABLE AI
+# =========================================================
+
+elif page == "🧠 Explainable AI":
+
+    page_header(
+        "Explainable AI – SHAP Analysis",
+        "Understand which features contributed most to the model's predictions."
+    )
+
+    st.markdown("### Global Feature Importance")
+
+    st.write(
+        "These features have the strongest overall influence "
+        "on the model's predictions."
+    )
+
+    importance_path = result_file(
+        "shap_feature_importance.csv"
+    )
+
+    if importance_path.exists():
+
+        importance = pd.read_csv(importance_path)
+
+        if "Mean_Absolute_SHAP" in importance.columns:
+
+            importance = importance.sort_values(
+                "Mean_Absolute_SHAP",
+                ascending=False
+            ).head(15)
+
+            st.bar_chart(
+                importance.set_index("Feature")[
+                    "Mean_Absolute_SHAP"
+                ],
+                horizontal=True
+            )
+
+        else:
+            st.dataframe(importance, use_container_width=True)
+
+        st.caption(
+            "Mean absolute SHAP values measure average feature "
+            "contribution magnitude. They do not establish causation."
+        )
+
+    else:
+
+        st.warning("Global SHAP feature importance file not found.")
+
+    col1, col2 = st.columns(2)
+
+    summary_path = result_file("shap_summary.png")
+    waterfall_path = result_file("shap_waterfall.png")
+
+    with col1:
+
+        st.markdown("### SHAP Summary Plot")
+
+        if summary_path.exists():
+            st.image(
+                str(summary_path),
+                use_container_width=True
+            )
+        else:
+            st.info("SHAP summary plot not found.")
+
+    with col2:
+
+        st.markdown("### SHAP Waterfall Plot")
+
+        if waterfall_path.exists():
+            st.image(
+                str(waterfall_path),
+                use_container_width=True
+            )
+        else:
+            st.info("SHAP waterfall plot not found.")
+
+    st.divider()
+
+    st.markdown("### Individual Transaction Explanation")
+
+    st.write(
+        "Calculate how individual transaction features influence "
+        "the prediction made by your trained XGBoost model."
+    )
+
+    current_transaction = get_current_transaction()
+
+    if current_transaction is None:
+
+        st.warning(
+            "No transaction is available. Submit a transaction "
+            "from the Fraud Prediction page first."
+        )
+
+    else:
+
+        source = st.session_state.get(
+            "current_source",
+            "Saved Sample Transaction"
+        )
+
+        st.info(
+            f"Explaining: **{source}**. "
+            "This explanation is calculated from the current transaction."
+        )
+
+        with st.expander("View current transaction"):
+
+            st.dataframe(
+                current_transaction,
+                use_container_width=True
+            )
+
+        try:
+
+            probabilities, predictions = get_prediction(
+                current_transaction
+            )
+
+            probability = float(probabilities[0])
+
+            st.markdown("#### Individual Model Prediction")
+
+            col1, col2, col3 = st.columns(3)
+
+            col1.metric(
+                "Fraud Probability",
+                f"{probability * 100:.2f}%"
+            )
+
+            col2.metric(
+                "Prediction",
+                prediction_label(probability)
+            )
+
+            col3.metric(
+                "Decision Threshold",
+                f"{THRESHOLD * 100:.0f}%"
+            )
+
+            st.divider()
+
+            with st.spinner(
+                "Calculating SHAP values for this transaction..."
+            ):
+
+                explanation = calculate_individual_shap(
+                    current_transaction
+                )
+
+            st.success(
+                "Individual SHAP explanation calculated successfully."
+            )
+
+            positive = explanation[
+                explanation["SHAP_Value"] > 0
+            ].sort_values(
+                "SHAP_Value",
+                ascending=False
+            )
+
+            negative = explanation[
+                explanation["SHAP_Value"] < 0
+            ].sort_values(
+                "SHAP_Value",
+                ascending=True
+            )
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+
+                st.markdown("#### Positive SHAP Contributions")
+
+                st.caption(
+                    "These features push the model output towards fraud."
+                )
+
+                if not positive.empty:
+
+                    st.dataframe(
+                        positive[
+                            ["Feature", "SHAP_Value"]
+                        ].head(10),
+                        use_container_width=True,
+                        hide_index=True
+                    )
+
+                else:
+
+                    st.write("No positive contributions.")
+
+            with col2:
+
+                st.markdown("#### Negative SHAP Contributions")
+
+                st.caption(
+                    "These features push the model output towards legitimate."
+                )
+
+                if not negative.empty:
+
+                    st.dataframe(
+                        negative[
+                            ["Feature", "SHAP_Value"]
+                        ].head(10),
+                        use_container_width=True,
+                        hide_index=True
+                    )
+
+                else:
+
+                    st.write("No negative contributions.")
+
+            st.divider()
+
+            st.markdown("### Top 10 Feature Contributions")
+
+            top_features = explanation.head(10).copy()
+
+            chart_data = top_features[
+                ["Feature", "SHAP_Value"]
+            ].set_index("Feature")
+
+            st.bar_chart(
+                chart_data,
+                horizontal=True
+            )
+
+            st.caption(
+                "Positive SHAP values push the model output towards fraud, "
+                "while negative values push it towards legitimate. "
+                "These values explain the XGBoost raw output (log-odds), "
+                "not direct percentage-point changes in probability."
+            )
+
+            with st.expander("View complete SHAP contribution data"):
+
+                st.dataframe(
+                    explanation[
+                        ["Feature", "SHAP_Value", "Absolute_SHAP"]
+                    ],
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+            st.divider()
+
+            st.markdown("### Understanding SHAP Contributions")
+
+            st.write(
+                "**Positive SHAP value:** Pushes the model output towards fraud."
+            )
+
+            st.write(
+                "**Negative SHAP value:** Pushes the model output towards legitimate."
+            )
+
+            st.write(
+                "**Larger absolute value:** Indicates a stronger contribution."
+            )
+
+            st.write(
+                "**Global importance:** Shows average contribution magnitude across samples."
+            )
+
+            st.write(
+                "SHAP explains how the trained model uses features to make "
+                "predictions. It does not establish that a feature causes fraud."
+            )
+
+        except Exception as error:
+
+            st.error(
+                f"Unable to calculate individual SHAP values: {error}"
+            )
+
+    if importance_path.exists():
+
+        with st.expander("Feature Importance Data"):
+
+            st.dataframe(
+                pd.read_csv(importance_path),
+                use_container_width=True,
+                hide_index=True
+            )
+
+
+# =========================================================
+# PAGE 4: WHAT-IF SIMULATOR
+# =========================================================
+
+elif page == "🎛️ What-if Simulator":
+
+    page_header(
+        "What-if Transaction Simulator",
+        "Experiment with hypothetical transaction amount changes "
+        "and observe model predictions."
+    )
+
+    current_transaction = get_current_transaction()
+
+    if current_transaction is None:
+
+        st.warning("No transaction is available.")
+
+    elif "TransactionAmt" not in current_transaction.columns:
+
+        st.error(
+            "TransactionAmt feature is not available in the current model input."
+        )
+
+    else:
+
+        original_transaction = current_transaction.copy()
+
+        original_amount = float(
+            original_transaction["TransactionAmt"].iloc[0]
+        )
+
+        original_probability = float(
+            get_prediction(original_transaction)[0][0]
+        )
+
+        st.markdown("### Original Transaction")
+
+        col1, col2 = st.columns(2)
+
+        col1.metric(
+            "Original Transaction Amount",
+            f"${original_amount:.2f}"
+        )
+
+        col2.metric(
+            "Original Fraud Probability",
+            f"{original_probability * 100:.2f}%"
+        )
+
+        st.divider()
+
+        st.markdown("### Change Transaction Amount")
+
+        new_amount = st.slider(
+            "Select a hypothetical transaction amount",
+            min_value=0.0,
+            max_value=float(max(1000, original_amount * 5)),
+            value=float(original_amount),
+            step=1.0
+        )
+
+        hypothetical_transaction = original_transaction.copy()
+
+        hypothetical_transaction.loc[
+            hypothetical_transaction.index[0],
+            "TransactionAmt"
+        ] = new_amount
+
+        hypothetical_probability = float(
+            get_prediction(hypothetical_transaction)[0][0]
+        )
+
+        col1, col2, col3 = st.columns(3)
+
+        col1.metric(
+            "New Amount",
+            f"${new_amount:.2f}"
+        )
+
+        col2.metric(
+            "New Fraud Probability",
+            f"{hypothetical_probability * 100:.2f}%"
+        )
+
+        col3.metric(
+            "Probability Change",
+            f"{(hypothetical_probability - original_probability) * 100:+.2f} pp"
+        )
+
+        if hypothetical_probability >= THRESHOLD:
+
+            st.error(
+                "The hypothetical transaction is classified as potential fraud."
+            )
+
+        else:
+
+            st.success(
+                "The hypothetical transaction is classified as legitimate risk."
+            )
+
+        comparison = pd.DataFrame({
+            "Transaction": [
+                "Original",
+                "Hypothetical"
+            ],
+            "Fraud Probability (%)": [
+                original_probability * 100,
+                hypothetical_probability * 100
+            ]
+        })
+
+        st.markdown("### Prediction Comparison")
+
+        st.bar_chart(
+            comparison.set_index("Transaction")
+        )
+
+        st.caption(
+            "Only TransactionAmt is changed. All other transaction "
+            "features remain fixed. This is a hypothetical model experiment, "
+            "not a guarantee of real-world fraud behaviour."
+        )
+
+
+# =========================================================
+# PAGE 5: BURST DETECTION
+# =========================================================
+
+elif page == "🚨 Burst Detection":
+
+    page_header(
+        "Suspicious Transaction Burst Detection",
+        "Identify unusual concentrations of suspicious transactions "
+        "within short time windows."
+    )
+
+    burst_path = result_file("burst_detection_results.csv")
+
+    alert_path = result_file("suspicious_burst_alerts.csv")
+
+    if burst_path.exists():
+
+        burst_data = pd.read_csv(burst_path)
+
+        total_windows = len(burst_data)
+
+        if "Burst_Alert" in burst_data.columns:
+
+            alerts = burst_data[
+                burst_data["Burst_Alert"].astype(str).str.lower().isin(
+                    ["true", "1", "yes"]
+                )
+            ]
+
+        else:
+
+            alerts = pd.DataFrame()
+
+        alert_count = len(alerts)
+
+        suspicious_count = 0
+
+        if "Suspicious_Transactions" in burst_data.columns:
+
+            suspicious_count = int(
+                burst_data["Suspicious_Transactions"].sum()
+            )
+
+        col1, col2, col3 = st.columns(3)
+
+        col1.metric("Total Time Windows", total_windows)
+
+        col2.metric("Burst Alert Windows", alert_count)
+
+        col3.metric("Suspicious Transactions", suspicious_count)
+
+        st.divider()
+
+        st.markdown("### Transaction Burst Analysis")
+
+        st.dataframe(
+            burst_data,
+            use_container_width=True
+        )
+
+        if "Total_Transactions" in burst_data.columns:
+
+            st.markdown("### Transactions per Time Window")
+
+            st.line_chart(
+                burst_data["Total_Transactions"]
+            )
+
+        if "Suspicious_Transactions" in burst_data.columns:
+
+            st.markdown("### Suspicious Transactions per Window")
+
+            st.bar_chart(
+                burst_data["Suspicious_Transactions"]
+            )
+
+    else:
+
+        st.warning("Burst detection results file not found.")
+
+    if alert_path.exists():
+
+        st.divider()
+
+        st.markdown("### Suspicious Burst Alerts")
+
+        alert_data = pd.read_csv(alert_path)
+
+        st.dataframe(
+            alert_data,
+            use_container_width=True
+        )
+
+        st.download_button(
+            "Download Burst Alerts",
+            data=alert_data.to_csv(index=False).encode("utf-8"),
+            file_name="suspicious_burst_alerts.csv",
+            mime="text/csv"
+        )
+
+    st.info(
+        "This page displays the existing historical burst detection "
+        "analysis. It is not a live transaction monitoring service."
+    )
+
+
+# =========================================================
+# PAGE 6: MODEL PERFORMANCE
+# =========================================================
+
+elif page == "📊 Model Performance":
+
+    page_header(
+        "Model Performance",
+        "Evaluate and compare machine learning models used "
+        "for e-commerce fraud detection."
+    )
+
+    comparison_path = result_file("model_comparison.csv")
+
+    final_metrics_path = result_file("final_test_metrics.csv")
+
+    # -----------------------------------------------------
+    # MODEL COMPARISON
+    # -----------------------------------------------------
+
+    st.markdown("### Model Comparison")
+
+    if comparison_path.exists():
+
+        comparison = pd.read_csv(comparison_path)
+
+        st.dataframe(
+            comparison,
+            use_container_width=True,
+            hide_index=True
+        )
+
+        if "Algorithm" in comparison.columns:
+
+            metric_options = [
+                metric for metric in [
+                    "Accuracy",
+                    "Precision",
+                    "Recall",
+                    "F1-score",
+                    "ROC-AUC",
+                    "PR-AUC"
+                ]
+                if metric in comparison.columns
+            ]
+
+            if metric_options:
+
+                selected_metric = st.selectbox(
+                    "Select evaluation metric",
+                    metric_options
+                )
+
+                chart_data = comparison[
+                    ["Algorithm", selected_metric]
+                ].set_index("Algorithm")
+
+                st.markdown(
+                    f"### Algorithm Comparison – {selected_metric}"
+                )
+
+                st.bar_chart(chart_data)
+
+    else:
+
+        st.warning("Model comparison file not found.")
+
+    st.divider()
+
+    # -----------------------------------------------------
+    # FINAL TEST PERFORMANCE
+    # -----------------------------------------------------
+
+    st.markdown("### Final XGBoost Test Performance")
+
+    if final_metrics_path.exists():
+
+        final_metrics = pd.read_csv(final_metrics_path)
+
+        st.dataframe(
+            final_metrics,
+            use_container_width=True,
+            hide_index=True
+        )
+
+        if len(final_metrics) > 0:
+
+            row = final_metrics.iloc[0]
+
+            col1, col2, col3 = st.columns(3)
+
+            col1.metric(
+                "Accuracy",
+                f"{row['Accuracy'] * 100:.2f}%"
+            )
+
+            col2.metric(
+                "Precision",
+                f"{row['Precision'] * 100:.2f}%"
+            )
+
+            col3.metric(
+                "Recall",
+                f"{row['Recall'] * 100:.2f}%"
+            )
+
+            col1, col2, col3 = st.columns(3)
+
+            col1.metric(
+                "F1-Score",
+                f"{row['F1-score'] * 100:.2f}%"
+            )
+
+            col2.metric(
+                "ROC-AUC",
+                f"{row['ROC-AUC']:.4f}"
+            )
+
+            col3.metric(
+                "PR-AUC",
+                f"{row['PR-AUC']:.4f}"
+            )
+
+    else:
+
+        st.warning("Final test metrics file not found.")
+
+    st.caption(
+        "Model comparison metrics are from the comparison evaluation. "
+        "Final XGBoost metrics are from the separate held-out test set."
+    )
+
+
+# =========================================================
+# FOOTER
+# =========================================================
+
+st.divider()
+
+st.markdown(
+    """
+    <div style="text-align:center; color:#64748b; font-size:13px;">
+        FraudShield AI | E-Commerce Fraud Detection |
+        Powered by Machine Learning and XGBoost
+    </div>
+    """,
+    unsafe_allow_html=True
+)
