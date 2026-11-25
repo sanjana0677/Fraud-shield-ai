@@ -1,3 +1,4 @@
+
 import json
 import warnings
 from pathlib import Path
@@ -19,6 +20,7 @@ warnings.filterwarnings("ignore")
 
 BASE_DIR = Path(__file__).resolve().parent
 
+
 def find_file(filename, folder=None):
     """Find a file in the root folder or its original subfolder."""
 
@@ -28,6 +30,7 @@ def find_file(filename, folder=None):
             return nested
 
     root_file = BASE_DIR / filename
+
     if root_file.exists():
         return root_file
 
@@ -40,6 +43,7 @@ FEATURES_PATH = find_file("selected_features.json", "models")
 THRESHOLD_PATH = find_file("decision_threshold.json", "models")
 SAMPLE_PATH = find_file("sample_transaction.csv", "data")
 
+
 st.set_page_config(
     page_title="FraudShield AI",
     page_icon="🛡️",
@@ -48,7 +52,7 @@ st.set_page_config(
 
 
 # =========================================================
-# CUSTOM CSS - SOFT BLUE AND LAVENDER THEME
+# CUSTOM CSS
 # =========================================================
 
 st.markdown("""
@@ -250,12 +254,11 @@ def result_file(relative_path):
 
     if len(parts) > 1:
         nested_path = BASE_DIR.joinpath(*parts)
+
         if nested_path.exists():
             return nested_path
 
-    root_path = BASE_DIR / Path(relative_path).name
-
-    return root_path
+    return BASE_DIR / Path(relative_path).name
 
 
 def prepare_input(data):
@@ -497,6 +500,10 @@ def manual_transaction_input():
                 "Manual Input"
             )
 
+            # Clear previous CSV results after manual submission.
+            st.session_state.pop("csv_prediction_results", None)
+            st.session_state.pop("shap_csv_row_selector", None)
+
             st.session_state["last_probability"] = float(
                 probabilities[0]
             )
@@ -692,7 +699,6 @@ def calculate_individual_shap(transaction):
 
     return explanation
 
-
 # =========================================================
 # SIDEBAR NAVIGATION
 # =========================================================
@@ -847,7 +853,7 @@ elif page == "🔍 Fraud Prediction":
 
         st.caption(
             "Open the Explainable AI page to view the SHAP explanation "
-            "for this exact transaction."
+            "for the selected transaction."
         )
 
 
@@ -892,7 +898,11 @@ elif page == "🧠 Explainable AI":
             )
 
         else:
-            st.dataframe(importance, use_container_width=True)
+
+            st.dataframe(
+                importance,
+                use_container_width=True
+            )
 
         st.caption(
             "Mean absolute SHAP values measure average feature "
@@ -913,11 +923,14 @@ elif page == "🧠 Explainable AI":
         st.markdown("### SHAP Summary Plot")
 
         if summary_path.exists():
+
             st.image(
                 str(summary_path),
                 use_container_width=True
             )
+
         else:
+
             st.info("SHAP summary plot not found.")
 
     with col2:
@@ -925,11 +938,14 @@ elif page == "🧠 Explainable AI":
         st.markdown("### SHAP Waterfall Plot")
 
         if waterfall_path.exists():
+
             st.image(
                 str(waterfall_path),
                 use_container_width=True
             )
+
         else:
+
             st.info("SHAP waterfall plot not found.")
 
     st.divider()
@@ -941,7 +957,57 @@ elif page == "🧠 Explainable AI":
         "the prediction made by your trained XGBoost model."
     )
 
-    current_transaction = get_current_transaction()
+    # -----------------------------------------------------
+    # NEW FEATURE: SELECT CSV TRANSACTION FOR SHAP
+    # -----------------------------------------------------
+
+    csv_results = st.session_state.get("csv_prediction_results")
+
+    if csv_results is not None and not csv_results.empty:
+
+        st.markdown("#### Select a Transaction to Explain")
+
+        def transaction_option_label(row_index):
+
+            row = csv_results.iloc[row_index]
+
+            probability = float(
+                row["Fraud_Probability"]
+            ) * 100
+
+            prediction = row["Prediction"]
+
+            return (
+                f"Row {row_index + 1} | "
+                f"Fraud Probability: {probability:.2f}% | "
+                f"{prediction}"
+            )
+
+        selected_row = st.selectbox(
+            "Choose a transaction:",
+            options=list(range(len(csv_results))),
+            format_func=transaction_option_label,
+            key="shap_csv_row_selector"
+        )
+
+        current_transaction = prepare_input(
+            csv_results.iloc[[selected_row]]
+        )
+
+        source = f"CSV Upload - Row {selected_row + 1}"
+
+    else:
+
+        current_transaction = get_current_transaction()
+
+        source = st.session_state.get(
+            "current_source",
+            "Saved Sample Transaction"
+        )
+
+    # -----------------------------------------------------
+    # INDIVIDUAL SHAP EXPLANATION
+    # -----------------------------------------------------
 
     if current_transaction is None:
 
@@ -952,17 +1018,12 @@ elif page == "🧠 Explainable AI":
 
     else:
 
-        source = st.session_state.get(
-            "current_source",
-            "Saved Sample Transaction"
-        )
-
         st.info(
             f"Explaining: **{source}**. "
-            "This explanation is calculated from the current transaction."
+            "This explanation is calculated from the selected transaction."
         )
 
-        with st.expander("View current transaction"):
+        with st.expander("View selected transaction"):
 
             st.dataframe(
                 current_transaction,
@@ -999,7 +1060,7 @@ elif page == "🧠 Explainable AI":
             st.divider()
 
             with st.spinner(
-                "Calculating SHAP values for this transaction..."
+                "Calculating SHAP values for the selected transaction..."
             ):
 
                 explanation = calculate_individual_shap(
@@ -1142,7 +1203,6 @@ elif page == "🧠 Explainable AI":
                 use_container_width=True,
                 hide_index=True
             )
-
 
 # =========================================================
 # PAGE 4: WHAT-IF SIMULATOR
