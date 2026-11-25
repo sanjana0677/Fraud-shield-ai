@@ -39,6 +39,7 @@ st.set_page_config(
     layout="wide"
 )
 
+
 # ---------------------------------------------------------
 # CUSTOM CSS
 # ---------------------------------------------------------
@@ -50,19 +51,24 @@ st.markdown("""
     }
 
     .block-container {
-        padding-top: 1.5rem;
-        padding-bottom: 2rem;
+        padding-top: 3rem !important;
+        padding-bottom: 2rem !important;
     }
 
     .main-title {
         font-size: 32px;
         font-weight: 800;
         color: #172554;
+        line-height: 1.5 !important;
+        padding-top: 10px;
+        padding-bottom: 8px;
+        overflow: visible;
     }
 
     .sub-title {
         color: #64748b;
         font-size: 15px;
+        line-height: 1.5;
     }
 
     .section-title {
@@ -84,7 +90,6 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
-
 
 # ---------------------------------------------------------
 # LOAD MODEL AND PREPROCESSOR
@@ -159,10 +164,11 @@ except Exception as error:
 # GENERAL HELPER FUNCTIONS
 # ---------------------------------------------------------
 
+
 def page_header(title, subtitle):
 
     st.markdown(
-        f'<div class="main-title">{title}</div>',
+        f'<h1 class="main-title">{title}</h1>',
         unsafe_allow_html=True
     )
 
