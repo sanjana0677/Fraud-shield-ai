@@ -40,33 +40,43 @@ st.set_page_config(
 )
 
 
+
 # ---------------------------------------------------------
-# CUSTOM CSS
+# CUSTOM CSS - SOFT BLUE & LAVENDER THEME
 # ---------------------------------------------------------
 
 st.markdown("""
 <style>
-    .main {
-        background-color: #f8fafc;
+
+    /* Main application background */
+    .stApp {
+        background-color: #F5F7FC;
     }
 
+    /* Main content spacing */
     .block-container {
         padding-top: 3rem !important;
         padding-bottom: 2rem !important;
     }
 
+    /* Sidebar */
+    [data-testid="stSidebar"] {
+        background-color: #EDF2FF;
+        border-right: 1px solid #DCE5F5;
+    }
+
+    /* Main headings */
     .main-title {
         font-size: 32px;
         font-weight: 800;
-        color: #172554;
+        color: #243B64;
         line-height: 1.5 !important;
         padding-top: 10px;
         padding-bottom: 8px;
-        overflow: visible;
     }
 
     .sub-title {
-        color: #64748b;
+        color: #71809B;
         font-size: 15px;
         line-height: 1.5;
     }
@@ -74,22 +84,67 @@ st.markdown("""
     .section-title {
         font-size: 23px;
         font-weight: 700;
-        color: #1e293b;
+        color: #344B73;
     }
 
+    /* Metric cards */
     div[data-testid="stMetric"] {
-        background-color: white;
-        border: 1px solid #e2e8f0;
-        padding: 15px;
+        background-color: #FFFFFF;
+        border: 1px solid #DCE5F5;
+        padding: 18px;
+        border-radius: 14px;
+        box-shadow: 0 3px 12px rgba(36, 59, 100, 0.05);
+    }
+
+    /* Buttons */
+    div.stButton > button,
+    div.stFormSubmitButton > button {
+        background-color: #647FC4;
+        color: white;
+        border: none;
+        border-radius: 9px;
+        font-weight: 600;
+        padding: 9px 18px;
+        transition: 0.2s ease;
+    }
+
+    div.stButton > button:hover,
+    div.stFormSubmitButton > button:hover {
+        background-color: #4D68AB;
+        color: white;
+        border: none;
+    }
+
+    /* Input fields */
+    div[data-baseweb="input"] input,
+    div[data-baseweb="select"] > div,
+    div[data-baseweb="textarea"] textarea {
+        background-color: #FFFFFF;
+        border-radius: 8px;
+    }
+
+    /* Dataframes */
+    div[data-testid="stDataFrame"] {
+        border: 1px solid #DCE5F5;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+
+    /* Expanders */
+    div[data-testid="stExpander"] {
+        background-color: #FFFFFF;
+        border: 1px solid #DCE5F5;
         border-radius: 10px;
     }
 
-    div.stButton > button {
-        border-radius: 8px;
-        font-weight: 600;
+    /* Horizontal divider */
+    hr {
+        border-color: #DCE5F5;
     }
+
 </style>
 """, unsafe_allow_html=True)
+
 
 # ---------------------------------------------------------
 # LOAD MODEL AND PREPROCESSOR
