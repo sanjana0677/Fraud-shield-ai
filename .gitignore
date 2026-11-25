@@ -1,0 +1,11 @@
+.venv/
+.venv312/
+venv/
+__pycache__/
+*.pyc
+.streamlit/secrets.toml
+
+data/raw/
+data/processed/
+
+app/app_backup.py
